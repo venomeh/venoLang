@@ -1,3 +1,5 @@
+from strings_with_arrows import *
+
 ##-------------------------------------- Tokens 
 
 
@@ -13,7 +15,7 @@ TT_DIV = 'DIV'
 TT_LPAREN = 'LPAREN'
 TT_RPAREN = 'RPAREN'
 
-# Error
+# -------------------------Errors
 class Error:
     def __init__(self, error_name ,details, pos_start=None, pos_end=None):
         self.pos_start = pos_start
@@ -24,12 +26,19 @@ class Error:
     def as_string(self):
         result = f'{self.error_name} : {self.details} \n'
         result += f'File {self.pos_start.fn}, line {self.pos_start.ln+1}'
+        result += '\n\n' + string_with_arrows(self.pos_start.ftxt, self.pos_start, self.pos_end)
         return result
 
 
 class IllegalCharError(Error):
     def __init__(self, details, pos_start=None, pos_end=None):
         super().__init__('Illegal Character', details, pos_start, pos_end)
+
+class InvalidSyntaxError(Error):
+    def __init__(self, pos_start, pos_end, details=''):
+        super().__init__(pos_start, pos_end, 'Invalid Syntax', details)
+
+
 
 
 # token
@@ -93,7 +102,6 @@ class Lexer:
 
             elif self.current_chr in DIGITS:
                 tokens.append(self.make_number())
-                self.advance()
 
             elif self.current_chr=='+':
                 tokens.append(Token(TT_PLUS))
@@ -148,8 +156,83 @@ class Lexer:
             return Token(TT_FLOAT, float(num_str))
         
 
+
+## ----------------------- Parser
+
+#numebr nodes
+class NumberNode:
+    def __init__(self,tok):
+        self.tok = tok
+    def __repr__(self):
+        return f'{self.tok}'
+
+class BinOpNode:
+    def __init__(self,left_node,op_tok,right_node):
+        self.left_node=left_node
+        self.right_node=right_node
+        self.op_tok = op_tok
+    
+    def __repr__(self):
+        return f'({self.left_node}, {self.op_tok}, {self.right_node})'
+
+
+
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.tok_idx = -1
+        #self.current_tok = None
+        self.advance()
+
+    def parse(self): 
+        res=self.expr()
+        return res
+
+    def advance(self):
+        self.tok_idx += 1
+        if self.tok_idx < len(self.tokens):
+            self.current_tok = self.tokens[self.tok_idx]
+        return self.current_tok
+
+
+    def factor(self):
+        tok = self.current_tok
+        if tok.type in (TT_INT, TT_FLOAT):
+            self.advance()
+            return NumberNode(tok)
+
+    def term(self):
+        return self.bin_op(self.factor, (TT_MUL, TT_DIV))
+
+    def expr(self):
+        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+
+    def bin_op(self, func, ops):
+        left = func()
+        while self.current_tok.type in ops:
+            op_tok = self.current_tok
+            self.advance()
+            right = func()
+            left = BinOpNode(left, op_tok, right)
+            
+        return left
+
+
+
+
+
+
+
+
+##------------------------------------- runner
+
 def run (fn, text):
     lexer = Lexer(fn ,text)
     tokens, error = lexer.make_tokens()
+    if error: return None, error
 
-    return tokens, error
+    # generating ast
+    parser = Parser(tokens)
+    ast = parser.parse()
+
+    return ast, None
